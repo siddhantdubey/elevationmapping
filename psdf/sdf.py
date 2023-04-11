@@ -1,6 +1,6 @@
 import numpy as np
-import open3d as o3d
 from scipy.spatial.transform import Rotation
+from scipy.spatial import cKDTree
 
 def depth_to_point_cloud(depth_image, camera_intrinsics, camera_pose):
     height, width = depth_image.shape
@@ -13,29 +13,25 @@ def depth_to_point_cloud(depth_image, camera_intrinsics, camera_pose):
     Z = depth_image
 
     points = np.stack((X, Y, Z), axis=-1).reshape(-1, 3)
-    frame_index, translation, rotation = camera_pose
-    rotation_matrix = Rotation.from_quat(rotation).as_matrix() 
-    transformation_matrix = np.eye(4)
-    transformation_matrix[:3, :3] = rotation_matrix
-    transformation_matrix[:3, 3] = translation
+    _, translation, rotation = camera_pose
+    rotation_matrix = Rotation.from_quat(rotation).as_matrix()
 
-    R, t = transformation_matrix[:3, :3], transformation_matrix[:3, 3]
+    R, t = rotation_matrix, translation
     points = (R @ points.T + t.reshape(3, 1)).T
 
-    point_cloud_o3d = o3d.geometry.PointCloud()
-    point_cloud_o3d.points = o3d.utility.Vector3dVector(points)
+    return points
 
-    return point_cloud_o3d
+def point_cloud_to_voxel_grid(points, voxel_size, origin):
+    voxel_indices = np.floor((points - origin) / voxel_size).astype(int)
+    return voxel_indices
 
-def compute_sdf(point_cloud, grid_origin, grid_shape, voxel_size):
-    sdf = np.ones(grid_shape, dtype=np.float32) * np.inf
-    grid_coords = np.floor((point_cloud - grid_origin) / voxel_size).astype(np.int32)
+def compute_sdf(voxel_indices, point_cloud, voxel_size, origin):
+    tree = cKDTree(point_cloud)
+    distances, _ = tree.query(voxel_indices * voxel_size + origin)
+    return distances
 
-    for point, coord in zip(point_cloud, grid_coords):
-        if np.all(coord >= 0) and np.all(coord < grid_shape):
-            distance = np.linalg.norm(point - (grid_origin + coord * voxel_size))
-            sdf[tuple(coord)] = min(sdf[tuple(coord)], distance)
-
-    sdf -= voxel_size / 2
-
-    return sdf
+def sdf_1d_to_3d(sdf, voxel_indices, grid_shape):
+    sdf_volume = np.zeros(grid_shape)
+    for i, idx in enumerate(voxel_indices):
+        sdf_volume[tuple(idx)] = sdf[i]
+    return sdf_volume

@@ -1,9 +1,8 @@
 import numpy as np
-import cv2
-
 from psdf.data_loader import load_ground_truth_poses, load_images, preprocess_images
-from psdf.sdf import depth_to_point_cloud, compute_sdf
-from psdf.visualizers import visualize_pointcloud
+from psdf.sdf import *
+from psdf.visualizers import visualize_elevation_map, plot_sdf
+from tqdm import tqdm
 
 image_dir = '/mnt/d/Documents/Projects/Robotics/test_data/'
 ground_truth_file = '/mnt/d/Documents/Projects/Robotics/test_data/livingRoom2.gt.freiburg'
@@ -11,18 +10,34 @@ ground_truth_file = '/mnt/d/Documents/Projects/Robotics/test_data/livingRoom2.gt
 poses = load_ground_truth_poses(ground_truth_file)
 camera_intrinsics = np.array([520.9, 521.0, 325.1, 249.7])
 
+sdfs = []
+point_clouds = []
+grid_origin = np.array([0, 0, 0])
+voxel_size = 100
 
-for frame_index, _, _ in poses:
+min_voxel_indices = float("inf")
+max_voxel_indices = float("-inf")
+
+
+for frame_index, _, _ in tqdm(poses, desc='Computing SDFs...'):
     rgb_image = load_images(image_dir, frame_index, image_type='rgb')
     depth_image = load_images(image_dir, frame_index, image_type='depth')
 
     rgb_image, depth_image = preprocess_images(rgb_image, depth_image)
-    #save rgb_image and depth_image to /mnt/d/Documents/Projects/Robotics/
-    cv2.imwrite(f'/mnt/d/Documents/Projects/Robotics/rgb_{frame_index}.png', rgb_image)
-    cv2.imwrite(f'/mnt/d/Documents/Projects/Robotics/depth_{frame_index}.png', depth_image)
-    print(poses[frame_index])
     pc = depth_to_point_cloud(depth_image, camera_intrinsics, poses[frame_index])
-    print(pc)
-    visualize_pointcloud(pc, file=f'/mnt/d/Documents/Projects/Robotics/pc_{frame_index}.png')
+    voxel_grid = point_cloud_to_voxel_grid(pc, voxel_size, grid_origin)
+    sdf_grid = compute_sdf(voxel_grid, pc, voxel_size, grid_origin)
+    sdfs.append([sdf_grid, voxel_grid])
+    min_voxel_indices = np.minimum(min_voxel_indices, voxel_grid.min(axis=0))
+    max_voxel_indices = np.maximum(max_voxel_indices, voxel_grid.max(axis=0))
+    point_clouds.append(pc)
     break
+
+sdf = sdfs[0][0]
+voxel_grid = sdfs[0][1]
+# i'll be honest, I don't know how to consistently get the grid shape based on voxel size
+grid_shape = tuple((max_voxel_indices - min_voxel_indices + 300).astype(int))
+offset = np.abs(min_voxel_indices).astype(int) + 1 # offset to make all values positive
+sdf_volume = sdf_1d_to_3d(sdf, voxel_grid + offset, grid_shape)
+plot_sdf(sdf_volume, voxel_size, file="sdf.png")
 
