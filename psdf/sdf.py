@@ -21,17 +21,36 @@ def depth_to_point_cloud(depth_image, camera_intrinsics, camera_pose):
 
     return points
 
+
 def point_cloud_to_voxel_grid(points, voxel_size, origin):
     voxel_indices = np.floor((points - origin) / voxel_size).astype(int)
     return voxel_indices
+
 
 def compute_sdf(voxel_indices, point_cloud, voxel_size, origin):
     tree = cKDTree(point_cloud)
     distances, _ = tree.query(voxel_indices * voxel_size + origin)
     return distances
 
+
 def sdf_1d_to_3d(sdf, voxel_indices, grid_shape):
     sdf_volume = np.zeros(grid_shape)
     for i, idx in enumerate(voxel_indices):
         sdf_volume[tuple(idx)] = sdf[i]
     return sdf_volume
+
+
+def initialize_sdf_volumes(grid_shape):
+    sdf_volume = np.zeros(grid_shape)
+    return sdf_volume
+
+
+def update_sdf_volumes(sdf_volume, sdf, voxel_indices):
+    for i, idx in enumerate(voxel_indices):
+        sdf_volume[tuple(idx)] += sdf[i]
+    return sdf_volume
+
+
+def compute_global_sdf(sdf_volume):
+    global_sdf = sdf_volume
+    return global_sdf

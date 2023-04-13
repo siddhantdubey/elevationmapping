@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from skimage import measure
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation
 
 def visualize_pointcloud(point_cloud, file="pointcloud.png"):
     fig = plt.figure()
@@ -12,6 +13,7 @@ def visualize_pointcloud(point_cloud, file="pointcloud.png"):
     ax.set_zlabel('Z')
     plt.savefig(file)
     plt.close()
+
 
 
 def plot_sdf(sdf, voxel_size, file="sdf.png"):
@@ -32,9 +34,9 @@ def plot_sdf(sdf, voxel_size, file="sdf.png"):
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
 
-    # Show the plot
     plt.savefig(file)
     plt.close()
+
 
 # ignore this for now
 def visualize_elevation_map(sdf, file="map.png"):

@@ -1,7 +1,10 @@
 import numpy as np
 from psdf.data_loader import load_ground_truth_poses, load_images, preprocess_images
-from psdf.sdf import *
-from psdf.visualizers import visualize_elevation_map, plot_sdf
+from psdf.sdf import (compute_sdf, update_sdf_volumes,
+                      point_cloud_to_voxel_grid, depth_to_point_cloud,
+                      initialize_sdf_volumes, compute_global_sdf,
+                      sdf_1d_to_3d)
+from psdf.visualizers import plot_sdf
 from tqdm import tqdm
 
 image_dir = '/mnt/d/Documents/Projects/Robotics/test_data/'
@@ -18,7 +21,7 @@ voxel_size = 100
 min_voxel_indices = float("inf")
 max_voxel_indices = float("-inf")
 
-
+count = 0
 for frame_index, _, _ in tqdm(poses, desc='Computing SDFs...'):
     rgb_image = load_images(image_dir, frame_index, image_type='rgb')
     depth_image = load_images(image_dir, frame_index, image_type='depth')
@@ -31,13 +34,15 @@ for frame_index, _, _ in tqdm(poses, desc='Computing SDFs...'):
     min_voxel_indices = np.minimum(min_voxel_indices, voxel_grid.min(axis=0))
     max_voxel_indices = np.maximum(max_voxel_indices, voxel_grid.max(axis=0))
     point_clouds.append(pc)
-    break
+    count += 1
+    if count == 100:
+        break
 
-sdf = sdfs[0][0]
-voxel_grid = sdfs[0][1]
-# i'll be honest, I don't know how to consistently get the grid shape based on voxel size
 grid_shape = tuple((max_voxel_indices - min_voxel_indices + 300).astype(int))
 offset = np.abs(min_voxel_indices).astype(int) + 1 # offset to make all values positive
-sdf_volume = sdf_1d_to_3d(sdf, voxel_grid + offset, grid_shape)
-plot_sdf(sdf_volume, voxel_size, file="sdf.png")
+sdf_volume = initialize_sdf_volumes(grid_shape)
 
+for sdf, voxel_grid in tqdm(sdfs, desc='Updating SDFs...'):
+    sdf_volume = update_sdf_volumes(sdf_volume, sdf, voxel_grid + offset)
+
+plot_sdf(sdf_volume, voxel_size, file="sdf_final.png")
