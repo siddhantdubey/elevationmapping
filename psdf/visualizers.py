@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage import measure
-from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.animation import FuncAnimation
 
 def visualize_pointcloud(point_cloud, file="pointcloud.png"):
@@ -16,8 +16,10 @@ def visualize_pointcloud(point_cloud, file="pointcloud.png"):
 
 
 
-def plot_sdf(sdf, voxel_size, file="sdf.png"):
-    verts, faces, _, _ = measure.marching_cubes(sdf, 0)
+def plot_sdf(sdf, voxel_size, file="sdf.png", level=None):
+    if level is None:
+        level = np.min(sdf)
+    verts, faces, _, _ = measure.marching_cubes(sdf, level=0)
 
     # Scale the vertices by the voxel size to get the correct coordinates
     verts *= voxel_size
@@ -34,16 +36,42 @@ def plot_sdf(sdf, voxel_size, file="sdf.png"):
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
 
+    ax.view_init(30, -45)
     plt.savefig(file)
-    plt.close()
-
 
 # ignore this for now
-def visualize_elevation_map(sdf, file="map.png"):
-    # 2d scatter plot
-    img = plt.imshow(sdf, cmap='viridis', origin='lower')
-    plt.colorbar(img, label='Height')
-    plt.title('Elevation Map')
-    plt.xlabel('X')
-    plt.ylabel('Y')
+def plot_elevation_map(elevation_map, x_values, y_values, file="map.png"):
+    X, Y = np.meshgrid(x_values, y_values)
+    fig, ax = plt.subplots(subplot_kw={'projection': '3d'})
+    ax.plot_surface(X, Y, elevation_map, cmap='terrain')
+    ax.set_title('Elevation Map')
     plt.savefig(file)
+
+def plot_esdf_mesh(esdf, level=None):
+    if level is None:
+        level = np.min(esdf)
+    # Extract the isosurface using the Marching Cubes algorithm
+    verts, faces, _, _ = measure.marching_cubes(esdf, level=level)
+
+    # Create a 3D plot
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Add the mesh to the plot
+    mesh = Poly3DCollection(verts[faces])
+    mesh.set_edgecolor('k')
+    ax.add_collection3d(mesh)
+
+    # Set the plot limits
+    ax.set_xlim(0, esdf.shape[0])
+    ax.set_ylim(0, esdf.shape[1])
+    ax.set_zlim(0, esdf.shape[2])
+
+    # Set the axis labels
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+
+    # Display the plot
+    plt.savefig("esdf.png")
+
