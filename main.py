@@ -1,7 +1,9 @@
 import numpy as np
+import open3d as o3d
 from psdf.data_loader import load_ground_truth_poses, load_images, preprocess_images
 from psdf.sdf import *
 from psdf.visualizers import plot_sdf, plot_elevation_map, plot_esdf_mesh
+from psdf.helpers import compare_sdf_tsdf
 from tqdm import tqdm
 
 
@@ -20,10 +22,12 @@ def main():
     grid_shape = tuple((max_voxel_indices - min_voxel_indices + 300).astype(int))
     offset = np.abs(min_voxel_indices).astype(int) + 1  # offset to make all values positive
     sdf_volume = initialize_sdf_volumes(grid_shape)
-
     sdf_volume = update_all_sdf_volumes(sdf_volume, sdfs, offset)
-
-    plot_sdf(sdf_volume, voxel_size, file="sdf_final.png")
+    tsdf = compute_tsdf(sdf_volume, 0.5)
+    isovalue = find_isovalue(tsdf)
+    plot_sdf(tsdf, voxel_size, file="tsdf.png", level=isovalue)
+    plot_sdf(sdf_volume, voxel_size, file="sdf_final.png", level=isovalue)
+    compare_sdf_tsdf(sdf_volume, tsdf)
 
 def compute_sdfs(poses, image_dir, camera_intrinsics, grid_origin, voxel_size):
     sdfs = []
@@ -44,7 +48,7 @@ def compute_sdfs(poses, image_dir, camera_intrinsics, grid_origin, voxel_size):
         min_voxel_indices = np.minimum(min_voxel_indices, voxel_grid.min(axis=0))
         max_voxel_indices = np.maximum(max_voxel_indices, voxel_grid.max(axis=0))
         point_clouds.append(pc)
-        grid_shape = tuple((max_voxel_indices - min_voxel_indices + 300).astype(int))
+        count += 1
         if count == 1:
             break
 

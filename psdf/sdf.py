@@ -1,4 +1,5 @@
 import numpy as np
+import open3d as o3d
 from scipy.spatial.transform import Rotation
 from scipy.spatial import cKDTree
 from scipy.ndimage import distance_transform_edt
@@ -30,9 +31,23 @@ def point_cloud_to_voxel_grid(points, voxel_size, origin):
 
 
 def compute_sdf(voxel_indices, point_cloud, voxel_size, origin):
+    point_cloud_o3d = o3d.geometry.PointCloud()
+    point_cloud_o3d.points = o3d.utility.Vector3dVector(point_cloud)
+    point_cloud_o3d.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=voxel_size * 2, max_nn=30))
+
+    normals = np.asarray(point_cloud_o3d.normals)
+
+    # Create a k-d tree for querying the point cloud
     tree = cKDTree(point_cloud)
-    distances, _ = tree.query(voxel_indices * voxel_size + origin)
-    return distances
+    
+    # Query the tree to find the nearest point and its index for each voxel
+    distances, nearest_indices = tree.query(voxel_indices * voxel_size + origin)
+
+    # Compute the signed distances
+    vectors_to_nearest_points = (voxel_indices * voxel_size + origin) - point_cloud[nearest_indices]
+    signed_distances = np.sum(vectors_to_nearest_points * normals[nearest_indices], axis=1)
+
+    return signed_distances
 
 
 def sdf_1d_to_3d(sdf, voxel_indices, grid_shape):
@@ -58,30 +73,10 @@ def compute_global_sdf(sdf_volume):
     return global_sdf
 
 
-def compute_esdf(global_sdf_volume, voxel_size=0.05):
-    # Compute the binary occupancy grid
-    occupancy_grid = global_sdf_volume > 0
+def compute_tsdf(sdf, truncation_limit):
+    tsdf = np.where(sdf <= truncation_limit, sdf, truncation_limit)
+    return tsdf
 
-    # Calculate the Euclidean Distance Transform (EDT) for occupied and free space
-    occupied_edt = distance_transform_edt(occupancy_grid, sampling=voxel_size)
-    free_edt = distance_transform_edt(~occupancy_grid, sampling=voxel_size)
-
-    # Subtract the free EDT from the occupied EDT to obtain the ESDF
-    esdf = occupied_edt - free_edt
-
-    return esdf
-
-# def compute_tsdf(point_cloud, x_range, y_range, z_range, voxel_size, voxel_margin):
-#     x, y, z = np.mgrid[x_range[0]:x_range[1]:voxel_size, y_range[0]:y_range[1]:voxel_size, z_range[0]:z_range[1]:voxel_size]
-#     grid_points = np.column_stack((x.ravel(), y.ravel(), z.ravel()))
-
-#     tree = cKDTree(point_cloud)
-#     distances, _ = tree.query(grid_points)
-
-#     tsdf = 1.0 - np.minimum(distances / (voxel_size * voxel_margin), 1.0)
-#     tsdf_volume = tsdf.reshape(x.shape)
-
-#     return tsdf_volume
 
 def sdf_to_elevation_map(global_sdf, voxel_size, origin, min_voxel_indices, index_offset):
     surface_points = np.argwhere(np.abs(global_sdf) < voxel_size)
@@ -97,3 +92,35 @@ def sdf_to_elevation_map(global_sdf, voxel_size, origin, min_voxel_indices, inde
     elevation_map[yi, xi] = surface_points[:, 2]
 
     return elevation_map, x_values, y_values
+
+def compute_esdf(tsdf, voxel_size):
+    # Threshold the TSDF to obtain a binary mask
+    mask = tsdf < 0
+
+    # Compute the Euclidean distance transform of the mask
+    distances = distance_transform_edt(mask, sampling=[voxel_size]*3)
+
+    # Convert the distances to signed distances using the TSDF
+    esdf = np.where(mask, -distances, distances)
+    esdf = np.where(np.abs(tsdf) < 1e-6, 0, esdf)
+
+    return esdf
+
+def find_isovalue(tsdf):
+    # Compute the histogram of TSDF values
+    hist, bins = np.histogram(tsdf.flatten(), bins=100, range=(-1, 1))
+
+    # Perform binary search to find the isovalue
+    lo = 0
+    hi = len(bins) - 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if np.sum(hist[mid:]) < np.sum(hist[:mid]):
+            hi = mid - 1
+        else:
+            lo = mid + 1
+
+    # The isovalue is the midpoint of the bin containing the threshold
+    isovalue = (bins[lo] + bins[lo + 1]) / 2
+
+    return isovalue

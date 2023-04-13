@@ -38,6 +38,7 @@ def plot_sdf(sdf, voxel_size, file="sdf.png", level=None):
 
     ax.view_init(30, -45)
     plt.savefig(file)
+    plt.close()
 
 # ignore this for now
 def plot_elevation_map(elevation_map, x_values, y_values, file="map.png"):
