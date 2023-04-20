@@ -23,10 +23,13 @@ def main():
     offset = np.abs(min_voxel_indices).astype(int) + 1  # offset to make all values positive
     sdf_volume = initialize_sdf_volumes(grid_shape)
     sdf_volume = update_all_sdf_volumes(sdf_volume, sdfs, offset)
-    tsdf = compute_tsdf(sdf_volume, 0.5)
-    isovalue = find_isovalue(tsdf)
-    plot_sdf(tsdf, voxel_size, file="tsdf.png", level=isovalue)
-    plot_sdf(sdf_volume, voxel_size, file="sdf_final.png", level=isovalue)
+    tsdf = compute_tsdf(sdf_volume, voxel_size)
+    esdf = compute_esdf(tsdf, voxel_size)
+    isovalue_tsdf = find_isovalue(tsdf)
+    isovalue_sdf = find_isovalue(sdf_volume)
+    plot_sdf(tsdf, voxel_size, file="tsdf.png", level=isovalue_tsdf)
+    plot_sdf(sdf_volume, voxel_size, file="sdf_final.png", level=isovalue_sdf)
+    plot_sdf(esdf, voxel_size, file="esdf.png", level=0)
     compare_sdf_tsdf(sdf_volume, tsdf)
 
 def compute_sdfs(poses, image_dir, camera_intrinsics, grid_origin, voxel_size):

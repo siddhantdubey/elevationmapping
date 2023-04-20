@@ -39,7 +39,6 @@ def compute_sdf(voxel_indices, point_cloud, voxel_size, origin):
 
     # Create a k-d tree for querying the point cloud
     tree = cKDTree(point_cloud)
-    
     # Query the tree to find the nearest point and its index for each voxel
     distances, nearest_indices = tree.query(voxel_indices * voxel_size + origin)
 
@@ -59,12 +58,6 @@ def sdf_1d_to_3d(sdf, voxel_indices, grid_shape):
 
 def initialize_sdf_volumes(grid_shape):
     sdf_volume = np.zeros(grid_shape)
-    return sdf_volume
-
-
-def update_sdf_volumes(sdf_volume, sdf, voxel_indices):
-    for i, idx in enumerate(voxel_indices):
-        sdf_volume[tuple(idx)] += sdf[i]
     return sdf_volume
 
 
@@ -93,18 +86,6 @@ def sdf_to_elevation_map(global_sdf, voxel_size, origin, min_voxel_indices, inde
 
     return elevation_map, x_values, y_values
 
-def compute_esdf(tsdf, voxel_size):
-    # Threshold the TSDF to obtain a binary mask
-    mask = tsdf < 0
-
-    # Compute the Euclidean distance transform of the mask
-    distances = distance_transform_edt(mask, sampling=[voxel_size]*3)
-
-    # Convert the distances to signed distances using the TSDF
-    esdf = np.where(mask, -distances, distances)
-    esdf = np.where(np.abs(tsdf) < 1e-6, 0, esdf)
-
-    return esdf
 
 def find_isovalue(tsdf):
     # Compute the histogram of TSDF values
@@ -124,3 +105,22 @@ def find_isovalue(tsdf):
     isovalue = (bins[lo] + bins[lo + 1]) / 2
 
     return isovalue
+
+def compute_esdf(tsdf, voxel_size):
+    # Threshold the TSDF to obtain binary masks for occupied and free voxels
+    occupied_mask = tsdf < 0
+    free_mask = tsdf >= 0
+
+    # Compute the Euclidean distance transforms for both masks
+    occupied_distances = distance_transform_edt(occupied_mask, sampling=[voxel_size]*3)
+    free_distances = distance_transform_edt(free_mask, sampling=[voxel_size]*3)
+
+    # Compute the ESDF by subtracting the distance transforms
+    esdf = occupied_distances - free_distances
+
+    return esdf
+
+def update_sdf_volumes(sdf_volume, sdf, voxel_indices):
+    for i, idx in enumerate(voxel_indices):
+        sdf_volume[tuple(idx)] += sdf[i]
+    return sdf_volume

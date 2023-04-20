@@ -15,15 +15,21 @@ def visualize_pointcloud(point_cloud, file="pointcloud.png"):
     plt.close()
 
 
+def save_mesh_as_obj(vertices, faces, filename):
+    with open(filename, 'w') as f:
+        for v in vertices:
+            f.write(f"v {v[0]} {v[1]} {v[2]}\n")
+        for face in faces:
+            f.write(f"f {face[0] + 1} {face[1] + 1} {face[2] + 1}\n")
+    print(f"Saved mesh to {filename}")
 
 def plot_sdf(sdf, voxel_size, file="sdf.png", level=None):
     if level is None:
         level = np.min(sdf)
-    verts, faces, _, _ = measure.marching_cubes(sdf, level=0)
-
+    verts, faces, _, _ = measure.marching_cubes(sdf, level=level)
     # Scale the vertices by the voxel size to get the correct coordinates
     verts *= voxel_size
-
+    save_mesh_as_obj(verts, faces, file.replace(".png", ".obj"))
     # Create a 3D plot
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -75,4 +81,3 @@ def plot_esdf_mesh(esdf, level=None):
 
     # Display the plot
     plt.savefig("esdf.png")
-
