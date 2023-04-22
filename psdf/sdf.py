@@ -71,22 +71,6 @@ def compute_tsdf(sdf, truncation_limit):
     return tsdf
 
 
-def sdf_to_elevation_map(global_sdf, voxel_size, origin, min_voxel_indices, index_offset):
-    surface_points = np.argwhere(np.abs(global_sdf) < voxel_size)
-    surface_points = surface_points - index_offset + min_voxel_indices
-    surface_points = surface_points * voxel_size + origin
-
-    # Project the surface points onto a 2D grid
-    x_values, y_values = np.unique(surface_points[:, 0]), np.unique(surface_points[:, 1])
-    xi = np.searchsorted(x_values, surface_points[:, 0])
-    yi = np.searchsorted(y_values, surface_points[:, 1])
-
-    elevation_map = np.zeros((y_values.size, x_values.size), dtype=np.float32)
-    elevation_map[yi, xi] = surface_points[:, 2]
-
-    return elevation_map, x_values, y_values
-
-
 def find_isovalue(tsdf):
     # Compute the histogram of TSDF values
     hist, bins = np.histogram(tsdf.flatten(), bins=100, range=(-1, 1))
@@ -106,6 +90,7 @@ def find_isovalue(tsdf):
 
     return isovalue
 
+
 def compute_esdf(tsdf, voxel_size):
     # Threshold the TSDF to obtain binary masks for occupied and free voxels
     occupied_mask = tsdf < 0
@@ -120,7 +105,24 @@ def compute_esdf(tsdf, voxel_size):
 
     return esdf
 
+
 def update_sdf_volumes(sdf_volume, sdf, voxel_indices):
     for i, idx in enumerate(voxel_indices):
         sdf_volume[tuple(idx)] += sdf[i]
     return sdf_volume
+
+
+def esdf_to_elevation_map(esdf, voxel_size, origin):
+    all_points = np.argwhere(esdf != np.inf)
+    all_points = all_points * voxel_size + origin
+    print(f"esdf: {esdf}, points: {all_points}")
+
+    # Project the points onto a 2D grid
+    x_values, y_values = np.unique(all_points[:, 0]), np.unique(all_points[:, 1])
+    xi = np.searchsorted(x_values, all_points[:, 0])
+    yi = np.searchsorted(y_values, all_points[:, 1])
+
+    elevation_map = np.zeros((y_values.size, x_values.size), dtype=np.float32)
+    elevation_map[yi, xi] = all_points[:, 2]
+    print(f"Length: {len(set(elevation_map.flatten()))}")
+    return elevation_map, x_values, y_values
